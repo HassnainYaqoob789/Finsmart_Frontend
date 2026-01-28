@@ -1,0 +1,121 @@
+@font-face {
+  font-family: "Poppins";
+  font-style: italic;
+  font-weight: 700;
+  src:
+    local("Poppins Bold"),
+    local("Poppins-Bold"),
+    url(https://fonts.gstatic.com/s/poppins/v20/pxiByp8kv8JHgFVrLGT9Z1xlFQ.woff2)
+      format("woff2");
+  font-display: swap;
+}
+* {
+  font-family: "Poppins", sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+  font-weight: 700;
+}
+body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff !important;
+}
+/* Styling for active state (with cut/space and bar) */
+.ant-menu-item-active {
+  background-color: #1E88E5 !important; /* Full blue background for active item */
+  color: #FFFFFF !important; /* White text for contrast */
+  padding-left: 12px !important; /* Creates the cut/space on the left */
+  position: relative !important; /* For positioning the ::before element */
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.ant-menu-item-selected::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 4px !important; /* Position the bar after the cut space */
+  top: 0 !important;
+  height: 100% !important;
+  width: 4px !important; /* Width of the left black bar */
+  background-color: #0c0c0c !important; /* Black bar color */
+}
+
+/* Ensure inactive items have no background and consistent padding */
+.ant-menu-item {
+  padding-left: 20px !important; /* Align with the design */
+  margin-bottom: 8px !important;
+  width: 100% !important;
+  padding: 22px 0;
+  /* background-color: transparent !important; No background for inactive items */
+}
+
+/* Prevent hover from interfering */
+.ant-menu-item:hover {
+  /* background-color: transparent !important; */
+  color: inherit !important;
+}
+
+
+.login-form-button {
+  width: 100%;
+  background: linear-gradient(90deg, #1E5BA8 0%, #00D9FF 100%) !important;
+  border: none !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  border-radius: 8px;
+  box-shadow: 0 4px 15px rgba(30, 91, 168, 0.3);
+  transition: all 0.3s ease;
+}
+
+.login-form-button:hover,
+.login-form-button:focus {
+  background: linear-gradient(90deg, #00D9FF 0%, #1E5BA8 100%) !important;
+  box-shadow: 0 6px 20px rgba(0, 217, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+.login-form-button:active {
+  transform: scale(0.98);
+  box-shadow: 0 2px 8px rgba(30, 91, 168, 0.2);
+}
+
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.simple-input {
+  border-radius: 8px !important;
+  border: 1px solid #d9d9d9 !important;
+  transition: all 0.3s ease;
+}
+
+.simple-input:hover,
+.simple-input:focus-within {
+  border-color: #1e5ba8 !important;
+  box-shadow: 0 0 0 2px rgba(0, 217, 255, 0.15);
+}
+
+.input-icon {
+  color: #1e5ba8;
+}
+
+.login-form-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: -5px;
+}
+
+.forgot-link {
+  color: #1e5ba8;
+  font-size: 14px;
+  transition: color 0.3s ease;
+}
+
+.forgot-link:hover {
+  color: #00d9ff;
+}
