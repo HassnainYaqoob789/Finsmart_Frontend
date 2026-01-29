@@ -9,7 +9,7 @@ import {
   EllipsisOutlined,
   ArrowLeftOutlined,
 } from "@ant-design/icons";
-import { Dropdown, Table, Button, message } from "antd";
+import { Dropdown, Table, Button, message, Modal } from "antd"; // Added Modal import
 import { PageHeader } from "@ant-design/pro-layout";
 import axios from "axios";
 
@@ -87,8 +87,39 @@ export default function DataTable({ config, extra = [] }) {
     );
   };
   const handleDelete = (record) => {
-    dispatch(erp.currentAction({ actionType: "delete", data: record }));
-    modal.open();
+    // Replaced custom modal with Ant Design's Modal.confirm for reliable handling
+    Modal.confirm({
+      title: translate("Confirm Delete"),
+      content: translate("Are you sure you want to delete this record?"),
+      okText: translate("Delete"),
+      okType: "danger",
+      cancelText: translate("Cancel"),
+      onOk: async () => {
+        try {
+          // Assuming erp.delete action exists; if not, replace with axios.delete
+          await dispatch(erp.delete({ entity, id: record._id })).unwrap(); // Use .unwrap() if using RTK Query
+          message.success(translate("Record deleted successfully"));
+          dispatch(erp.list({ entity })); // Refresh the list
+        } catch (error) {
+          console.error("Delete error:", error);
+          message.error(translate("Failed to delete record"));
+        } finally {
+          // Ensure body overflow is reset (extra safety)
+          document.body.style.overflow = "";
+          document.body.style.paddingRight = "";
+        }
+      },
+      onCancel: () => {
+        // Reset body styles on cancel
+        document.body.style.overflow = "";
+        document.body.style.paddingRight = "";
+      },
+      afterClose: () => {
+        // Clean up after modal closes
+        document.body.style.overflow = "";
+        document.body.style.paddingRight = "";
+      },
+    });
   };
   const handleRecordPayment = (record) => {
     dispatch(erp.currentItem({ data: record }));
@@ -251,15 +282,15 @@ export default function DataTable({ config, extra = [] }) {
         const items = [
           ...(record.FbrInvoiceNo === ""
             ? [
-                {
-                  label: "Submit To FBR",
-                  key: "fbr",
-                  icon: <EyeOutlined />,
-                },
-                {
-                  type: "divider",
-                },
-              ]
+              {
+                label: "Submit To FBR",
+                key: "fbr",
+                icon: <EyeOutlined />,
+              },
+              {
+                type: "divider",
+              },
+            ]
             : []),
           {
             label: translate("Show"),
@@ -268,12 +299,12 @@ export default function DataTable({ config, extra = [] }) {
           },
           ...(record.FbrInvoiceNo === ""
             ? [
-                {
-                  label: translate("Edit"),
-                  key: "edit",
-                  icon: <EditOutlined />,
-                },
-              ]
+              {
+                label: translate("Edit"),
+                key: "edit",
+                icon: <EditOutlined />,
+              },
+            ]
             : []),
           {
             label: translate("Download"),
@@ -357,6 +388,14 @@ export default function DataTable({ config, extra = [] }) {
     const options = { equal: value, filter: searchConfig?.entity };
     dispatch(erp.list({ entity, options }));
   };
+
+  // Added global cleanup effect for safety (in case custom modal is still used elsewhere)
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = "";
+      document.body.style.paddingRight = "";
+    };
+  }, []);
 
   return (
     <>

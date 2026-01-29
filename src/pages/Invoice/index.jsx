@@ -30,11 +30,18 @@ export default function Invoice() {
       dataIndex: ['buyerBusinessName', 'name'],
     },
     {
-      title: translate('Date'),
+      title: translate('Invoice Date'),
       dataIndex: 'invoiceDate',
-      render: (date) => {
-        return dayjs(date).format(dateFormat);
-      },
+      render: (date) => (
+        date ? dayjs(date).format('DD MMM YYYY') : '-'
+      ),
+    },
+      {
+      title: translate('Created At'),
+      dataIndex: 'created',
+      render: (date) => (
+        date ? dayjs(date).format('DD MMM YYYY, hh:mm A') : '-'
+      ),
     },
 
     {

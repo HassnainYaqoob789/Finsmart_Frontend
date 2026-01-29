@@ -24,16 +24,19 @@ import axios from "axios";
 function SaveForm({ form }) {
   const translate = useLanguage();
   const [loadingValidate, setLoadingValidate] = useState(false);
+  const [isFbrValid, setIsFbrValid] = useState(false);           // ← Validation status
+  const [fbrSubmit, setFbrSubmit] = useState(false);             // ← Local toggle state
 
-  const handleSave = async (e) => {
-    e.preventDefault();
-    try {
-      await form.validateFields();
-      form.submit();
-    } catch (error) {
-      console.error("Validation error:", error);
+  // Form se live fbrsubmit value watch kar rahe hain
+  const fbrSubmitFromForm = Form.useWatch('fbrsubmit', form);
+
+  useEffect(() => {
+    // Toggle change hone par validation reset
+    if (fbrSubmitFromForm !== fbrSubmit) {
+      setFbrSubmit(fbrSubmitFromForm || false);
+      setIsFbrValid(false); // Reset validation jab toggle badle
     }
-  };
+  }, [fbrSubmitFromForm]);
 
   const handleValidateFBR = async () => {
     try {
@@ -41,13 +44,11 @@ function SaveForm({ form }) {
       await form.validateFields();
 
       const values = form.getFieldsValue();
-      const today = dayjs().format('YYYY-MM-DD');
-      console.log("checkData", values)
+
       const payload = {
         invoiceType: values.invoiceType,
-        // invoiceDate: today,
         invoiceDate: values.invoiceDate
-          ? dayjs(values.invoiceDate).format('YYYY-MM-DD')   // ← yeh line add karo
+          ? dayjs(values.invoiceDate).format('YYYY-MM-DD')
           : null,
         sellerBusinessName: values.sellerBusinessName,
         sellerProvince: values.sellerProvince,
@@ -89,9 +90,9 @@ function SaveForm({ form }) {
         const validationStatus = response.data.result?.validationResponse?.status;
 
         if (validationStatus === "Valid") {
-          message.success(translate("Invoice is valid with FBR"), 8);
+          message.success(translate("Invoice is valid with FBR"), 6);
+          setIsFbrValid(true);
         } else {
-          // Invalid ya koi aur status
           const errorMessage =
             response.data.result?.validationResponse?.error ||
             response.data.result?.validationResponse?.invoiceStatuses?.[0]?.error ||
@@ -99,10 +100,11 @@ function SaveForm({ form }) {
             "Validation failed - unknown error";
 
           message.error(`${translate("Invoice validation failed")}: ${errorMessage}`, 10);
+          setIsFbrValid(false);
         }
       } else {
-        // success: false case
         message.error(response.data.message || translate("FBR API call failed"), 8);
+        setIsFbrValid(false);
       }
     } catch (error) {
       console.error("FBR validation error:", error);
@@ -111,36 +113,61 @@ function SaveForm({ form }) {
         error.message ||
         translate("Error while validating with FBR");
       message.error(errMsg, 8);
+      setIsFbrValid(false);
     } finally {
       setLoadingValidate(false);
     }
   };
 
+  const handleSave = async (e) => {
+    e.preventDefault();
+
+    // Agar FBR submit ON hai aur validate nahi hua → rok do
+    if (fbrSubmit && !isFbrValid) {
+      message.warning(translate("Please validate the invoice with FBR first!"), 6);
+      return;
+    }
+
+    try {
+      await form.validateFields();
+      form.submit();
+    } catch (error) {
+      console.error("Form validation failed:", error);
+    }
+  };
+  useEffect(() => { console.log("checkvalidareinvocie", fbrSubmit, isFbrValid) }, [fbrSubmit, isFbrValid])
+
   return (
     <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-      <Button
-        onClick={handleValidateFBR}
-        loading={loadingValidate}
-        icon={<SafetyCertificateOutlined />}
-        style={{
-          borderRadius: "8px",
-          fontWeight: 600,
-          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-        }}
-      >
-        {translate("Validate FBR Invoice")}
-      </Button>
+      {true && (
+        <Button
+          onClick={handleValidateFBR}
+          loading={loadingValidate}
+          icon={<SafetyCertificateOutlined />}
+          type={isFbrValid ? "default" : "primary"}
+          style={{
+            borderRadius: "8px",
+            fontWeight: 600,
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+            backgroundColor: isFbrValid ? "#52c41a" : undefined,
+            color: isFbrValid ? "#fff" : undefined,
+          }}
+        >
+          {isFbrValid ? translate("Validated ✓") : translate("Validate FBR Invoice")}
+        </Button>
+      )}
 
       <Button
         onClick={handleSave}
         type="primary"
+        disabled={fbrSubmit && !isFbrValid}   // ← Yeh line sabse zaroori hai
         icon={<PlusOutlined />}
         style={{
           borderRadius: "8px",
           fontWeight: 600,
           letterSpacing: "0.5px",
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          backgroundColor: "#0D1B2A",
+          backgroundColor: fbrSubmit && !isFbrValid ? "#999" : "#0D1B2A",
           color: "#FFFFFF",
         }}
       >

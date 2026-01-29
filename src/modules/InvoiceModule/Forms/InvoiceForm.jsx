@@ -652,6 +652,29 @@ export default function InvoiceForm({ subTotal = 0, offerTotal = 0, current = nu
         onFinish={handleFormSubmit}
         className="space-y-6"
       >
+        <Col xs={24} sm={12} md={6} lg={4}>
+          <div style={{ padding: '8px 0', background: '#f0f9ff', borderRadius: 8, border: '1px solid #bae6fd' }}>
+            <Tooltip
+              title="If this is turned ON, the invoice will be submitted to FBR (Federal Board of Revenue). You must first validate using the 'Validate FBR Invoice' button before saving."
+              placement="topLeft"
+            >
+              <Form.Item
+                name="fbrsubmit"
+                label={<span style={{ fontWeight: 600 }}>FBR Submission</span>}
+                valuePropName="checked"
+                style={{ margin: '0 12px' }}
+              >
+                <Switch
+                  checked={fbrsubmit}
+                  onChange={handleToggle}
+                  checkedChildren="YES - Submit to FBR"
+                  unCheckedChildren="NO"
+                  size="default"
+                />
+              </Form.Item>
+            </Tooltip>
+          </div>
+        </Col>
         <Divider className="bg-teal-600 text-white font-bold text-lg py-2 rounded">
           {translate('Buyer Seller Detail')}
         </Divider>
@@ -837,20 +860,7 @@ export default function InvoiceForm({ subTotal = 0, offerTotal = 0, current = nu
             </Form.Item>
           </Col>
 
-          <Col xs={24} sm={12} md={6}>
-            <Form.Item
-              name="fbrsubmit"
-              label={translate('FBR Submit')} // Adjust label as needed
-              valuePropName="checked" // Required for Switch to work with Form
-            >
-              <Switch
-                checked={fbrsubmit}
-                onChange={handleToggle}
-                checkedChildren="Submit"
-                unCheckedChildren="Not Sumbit"
-              />
-            </Form.Item>
-          </Col>
+
         </Row>
 
         <Divider className="bg-teal-600 text-white font-bold text-lg py-2 rounded">
