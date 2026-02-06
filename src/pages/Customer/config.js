@@ -1,6 +1,6 @@
 export const fields = {
   'NTN#': {
-    type: 'number',
+    type: 'text',
   },
   name: {
     type: 'string',
