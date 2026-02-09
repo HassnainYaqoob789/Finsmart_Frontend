@@ -185,6 +185,33 @@ export default function InvoiceForm({ subTotal = 0, offerTotal = 0, current = nu
     }
   }, [current, form, saleTypeData]);
 
+  const isExemptRate = (rateOption) => {
+    if (!rateOption) return false;
+
+    const label = String(rateOption.label || "").toLowerCase();
+    const value = Number(rateOption.value ?? 0);
+
+    return label.includes("exempt") || value === 0;
+  };
+
+  const getSafeTaxRate = (rateOption) => {
+    if (!rateOption) return 0;
+
+    const label = String(rateOption.label ?? "").toLowerCase();
+
+    // EXEMPT / ZERO SAFE
+    if (label.includes("exempt")) return 0;
+
+    // Extract numeric safely
+    const numeric = parseFloat(label.replace(/[^\d.]/g, ""));
+
+    if (Number.isNaN(numeric)) return 0;
+
+    return numeric / 100;
+  };
+
+
+
 
   useEffect(() => {
     const newTaxTotal = items.reduce((sum, item) => calculate.add(sum, item.salesTaxApplicable || 0), 0);
@@ -252,100 +279,219 @@ export default function InvoiceForm({ subTotal = 0, offerTotal = 0, current = nu
     }
   };
 
-  const handleSaveItem = async () => {
-    try {
-      const values = await itemForm.validateFields();
-
-      const rateDesc = rateOptions?.find(opt => opt.value === values.rate)?.label || values.rate;
-      const sroLabel = sroOptions?.find(opt => opt.value === values.sroScheduleNo)?.label || values.sroScheduleNo;
-
-      const rateNum = parseFloat(rateDesc) / 100;
-      const valueSalesExcludingST = calculate.multiply(values.quantity || 0, values.unitPrice || 0) - (values.discount || 0);
-      const salesTaxApplicable = Number.parseFloat(calculate.multiply(valueSalesExcludingST, rateNum));
-
-      const valueSalesIncludingST = calculate.add(valueSalesExcludingST, salesTaxApplicable);
-
-      const saleTypeDesc = saleTypeData.find(item => item.transactioN_TYPE_ID === Number(form.getFieldValue('saleType')))?.transactioN_DESC || '';
-
-      const selectedProduct = products.find(p => p._id === values.productDescription);
-      const productName = selectedProduct ? selectedProduct["Product Name"] : '';
-      const productHS_Code = selectedProduct?.category?.["HS Code"] || values.hsCode;
-      const productUOM = selectedProduct?.uom || values.uoM;
-
-      const newItem = {
-        hsCode: productHS_Code,
-        productId: values.productDescription,
-        productDescription: productName,
-        unitPrice: values.unitPrice,
-        rate: rateDesc,
-        uoM: productUOM,
-        quantity: values.quantity,
-        valueSalesExcludingST: Number.parseFloat(valueSalesExcludingST),
-        salesTax: salesTaxApplicable,
-        valueSalesIncludingST: Number.parseFloat(valueSalesIncludingST),
-        fixedNotifiedValueOrRetailPrice: values.fixedNotifiedValueOrRetailPrice || 0,
-        salesTaxApplicable: salesTaxApplicable,
-        salesTaxWithheldAtSource: values.salesTaxWithheldAtSource || 0,
-        extraTax: values.extraTax || 0,
-        furtherTax: values.furtherTax || 0,
-        sroScheduleNo: sroLabel || '',
-        sroItemSerialNo: values.sroItemSerialNo || '',
-        fedPayable: values.fedPayable || 0,
-        discount: values.discount || 0,
-        totalValues: Number.parseFloat(valueSalesIncludingST),
-        saleType: saleTypeDesc,
-      };
-
-      const currentItems = form.getFieldValue('items') || [];
-      const updatedItems = [...currentItems, newItem];
-      form.setFieldsValue({ items: updatedItems });
-      setItems(updatedItems);
-      itemForm.resetFields();
-    } catch (error) {
-      console.error('Validation Failed:', error);
-    }
-  };
-
   // const handleSaveItem = async () => {
   //   try {
   //     const values = await itemForm.validateFields();
 
-  //     // New: Get the rate description from rateOptions
-  //     const rateDesc = rateOptions?.find(opt => opt.value === values.rate)?.label || values.rate; // Fallback to ID if not found
-  //     const sroLabel = sroOptions?.find(opt => opt.value === values.sroScheduleNo)?.label || values.sroScheduleNo; // Fallback to ID if not found
+  //     const rateOption = rateOptions?.find(
+  //       opt => opt.value === values.rate
+  //     );
 
-  //     const rateNum = parseFloat(rateDesc) / 100; // Updated: Parse from description (handles "18%" -> 18)
-  //     const salesTaxApplicable = Number.parseFloat(calculate.multiply(values.valueSalesExcludingST || 0, rateNum));
-  //     const saleTypeDesc = saleTypeData.find(item => item.transactioN_TYPE_ID === Number(form.getFieldValue('saleType')))?.transactioN_DESC || '';
+  //     const rateDesc = rateOption?.label || values.rate;
+
+  //     const sroLabel =
+  //       sroOptions?.find(opt => opt.value === values.sroScheduleNo)?.label ||
+  //       values.sroScheduleNo;
+
+  //     const quantity = Number(values.quantity || 0);
+  //     const unitPrice = Number(values.unitPrice || 0);
+  //     const discount = Number(values.discount || 0);
+
+  //     // ✅ Value excluding ST
+  //     const grossAmount = calculate.multiply(quantity, unitPrice);
+  //     const valueSalesExcludingST = calculate.subtract(grossAmount, discount);
+
+  //     // ✅ Sales Tax (Exempt Safe)
+  //     let salesTaxApplicable = 0;
+
+  //     if (!isExemptRate(rateOption)) {
+  //       const rateNum = parseFloat(rateOption?.label || 0) / 100;
+
+  //       if (!Number.isNaN(rateNum) && rateNum > 0) {
+  //         salesTaxApplicable = Number.parseFloat(
+  //           calculate.multiply(valueSalesExcludingST, rateNum)
+  //         );
+  //       }
+  //     }
+
+  //     // ✅ Auto ZERO other taxes if exempt
+  //     const extraTax = isExemptRate(rateOption) ? 0 : Number(values.extraTax || 0);
+  //     const furtherTax = isExemptRate(rateOption) ? 0 : Number(values.furtherTax || 0);
+  //     const fedPayable = isExemptRate(rateOption) ? 0 : Number(values.fedPayable || 0);
+  //     const salesTaxWithheldAtSource = isExemptRate(rateOption)
+  //       ? 0
+  //       : Number(values.salesTaxWithheldAtSource || 0);
+
+  //     // ✅ Final value including ST
+  //     const valueSalesIncludingST = calculate.add(
+  //       valueSalesExcludingST,
+  //       salesTaxApplicable
+  //     );
+
+  //     const saleTypeDesc =
+  //       saleTypeData.find(
+  //         item =>
+  //           item.transactioN_TYPE_ID === Number(form.getFieldValue("saleType"))
+  //       )?.transactioN_DESC || "";
+
+  //     const selectedProduct = products.find(
+  //       p => p._id === values.productDescription
+  //     );
+
+  //     const productName = selectedProduct
+  //       ? selectedProduct["Product Name"]
+  //       : "";
+
+  //     const productHS_Code =
+  //       selectedProduct?.category?.["HS Code"] || values.hsCode;
+
+  //     const productUOM = selectedProduct?.uom || values.uoM;
 
   //     const newItem = {
-  //       hsCode: values.hsCode,
-  //       productDescription: values.productDescription,
-  //       rate: rateDesc, // Updated: Store description instead of ID
-  //       uoM: values.uoM,
-  //       quantity: values.quantity,
-  //       valueSalesExcludingST: values.valueSalesExcludingST,
-  //       fixedNotifiedValueOrRetailPrice: values.fixedNotifiedValueOrRetailPrice || 0,
-  //       salesTaxApplicable: salesTaxApplicable,
-  //       salesTaxWithheldAtSource: values.salesTaxWithheldAtSource || 0,
-  //       extraTax: values.extraTax || 0,
-  //       furtherTax: values.furtherTax || 0,
-  //       sroScheduleNo: sroLabel || '',
-  //       sroItemSerialNo: values.sroItemSerialNo || '',
-  //       fedPayable: values.fedPayable || 0,
-  //       discount: values.discount || 0,
-  //       totalValues: values.totalValues || 0,
+  //       hsCode: productHS_Code,
+  //       productId: values.productDescription,
+  //       productDescription: productName,
+  //       unitPrice,
+  //       rate: rateDesc,
+  //       uoM: productUOM,
+  //       quantity,
+
+  //       valueSalesExcludingST: Number.parseFloat(valueSalesExcludingST),
+  //       salesTax: salesTaxApplicable,
+  //       salesTaxApplicable,
+
+  //       valueSalesIncludingST: Number.parseFloat(valueSalesIncludingST),
+  //       totalValues: Number.parseFloat(valueSalesIncludingST),
+
+  //       fixedNotifiedValueOrRetailPrice:
+  //         values.fixedNotifiedValueOrRetailPrice || 0,
+
+  //       salesTaxWithheldAtSource,
+  //       extraTax,
+  //       furtherTax,
+  //       fedPayable,
+
+  //       sroScheduleNo: sroLabel || "",
+  //       sroItemSerialNo: values.sroItemSerialNo || "",
+  //       discount,
   //       saleType: saleTypeDesc,
   //     };
-  //     const currentItems = form.getFieldValue('items') || [];
+
+  //     const currentItems = form.getFieldValue("items") || [];
   //     const updatedItems = [...currentItems, newItem];
+
   //     form.setFieldsValue({ items: updatedItems });
   //     setItems(updatedItems);
+
   //     itemForm.resetFields();
   //   } catch (error) {
-  //     console.error('Validation Failed:', error);
+  //     console.error("Validation Failed:", error);
   //   }
   // };
+
+
+  const handleSaveItem = async () => {
+    try {
+      const values = await itemForm.validateFields();
+
+      const rateOption = rateOptions?.find(
+        opt => opt.value === values.rate
+      );
+
+      const rateDesc = rateOption?.label || values.rate;
+
+      const sroLabel =
+        sroOptions?.find(opt => opt.value === values.sroScheduleNo)?.label ||
+        values.sroScheduleNo;
+
+      const quantity = Math.max(Number(values.quantity || 0), 0);
+      const unitPrice = Math.max(Number(values.unitPrice || 0), 0);
+      const discount = Math.max(Number(values.discount || 0), 0);
+
+      // ✅ Gross
+      const grossAmount = calculate.multiply(quantity, unitPrice);
+
+      // Prevent negative subtotal
+      const valueSalesExcludingST = Math.max(grossAmount - discount, 0);
+
+      // ✅ SAFE TAX RATE
+      const taxRate = getSafeTaxRate(rateOption);
+
+      const salesTaxApplicable =
+        taxRate > 0
+          ? Number.parseFloat(
+            calculate.multiply(valueSalesExcludingST, taxRate)
+          )
+          : 0;
+
+      const isExempt = taxRate === 0;
+
+      // Auto zero other taxes if exempt
+      const extraTax = isExempt ? 0 : Number(values.extraTax || 0);
+      const furtherTax = isExempt ? 0 : Number(values.furtherTax || 0);
+      const fedPayable = isExempt ? 0 : Number(values.fedPayable || 0);
+      const salesTaxWithheldAtSource = isExempt
+        ? 0
+        : Number(values.salesTaxWithheldAtSource || 0);
+
+      const valueSalesIncludingST = calculate.add(
+        valueSalesExcludingST,
+        salesTaxApplicable
+      );
+
+      const saleTypeDesc =
+        saleTypeData.find(
+          item =>
+            item.transactioN_TYPE_ID === Number(form.getFieldValue("saleType"))
+        )?.transactioN_DESC || "";
+
+      const selectedProduct = products.find(
+        p => p._id === values.productDescription
+      );
+
+      const newItem = {
+        hsCode: selectedProduct?.category?.["HS Code"] || values.hsCode,
+        productId: values.productDescription,
+        productDescription: selectedProduct
+          ? selectedProduct["Product Name"]
+          : "",
+        unitPrice,
+        rate: rateDesc,
+        uoM: selectedProduct?.uom || values.uoM,
+        quantity,
+
+        valueSalesExcludingST,
+        salesTax: salesTaxApplicable,
+        salesTaxApplicable,
+
+        valueSalesIncludingST,
+        totalValues: valueSalesIncludingST,
+
+        fixedNotifiedValueOrRetailPrice:
+          Number(values.fixedNotifiedValueOrRetailPrice || 0),
+
+        salesTaxWithheldAtSource,
+        extraTax,
+        furtherTax,
+        fedPayable,
+
+        sroScheduleNo: sroLabel || "",
+        sroItemSerialNo: values.sroItemSerialNo || "",
+        discount,
+        saleType: saleTypeDesc,
+      };
+
+      const currentItems = form.getFieldValue("items") || [];
+      const updatedItems = [...currentItems, newItem];
+
+      form.setFieldsValue({ items: updatedItems });
+      setItems(updatedItems);
+
+      itemForm.resetFields();
+    } catch (error) {
+      console.error("Validation Failed:", error);
+    }
+  };
 
   const checkBuyerSellerComplete = (allValues) => {
     return requiredBuyerSellerFields.every(field => {
@@ -517,72 +663,108 @@ export default function InvoiceForm({ subTotal = 0, offerTotal = 0, current = nu
     }
   };
 
-  // const handleFormSubmit = async (values) => {
+
+  // const calculateItemValues = async (formInstance) => {
   //   try {
-  //     const { saleType, ...restValues } = values;
-  //     // Prepare the payload for the API
-  //     const payload = {
-  //       ...restValues,
-  //       invoiceDate: values.invoiceDate ? dayjs(values.invoiceDate).format('YYYY-MM-DD') : null,
-  //       items: items,
-  //       // total: total,
-  //       // taxTotal: taxTotal,
-  //     };
+  //     const values = await formInstance.validateFields([
+  //       "quantity",
+  //       "unitPrice",
+  //       "rate",
+  //       "discount",
+  //     ]);
 
-  //     // Call the original onFinish handler
+  //     const quantity = Number(values.quantity || 0);
+  //     const unitPrice = Number(values.unitPrice || 0);
+  //     const discount = Number(values.discount || 0);
 
-  //     // Make the POST API call to submit the digital invoice
-  //     const response = await axios.post(
-  //       `${API_BASE_URL}user-fbr/digital_invoice`,
-  //       payload,
-  //       {
-  //         headers: { Authorization: `Bearer ${authData?.current?.token}` },
-  //       }
+  //     // 1️⃣ Gross amount
+  //     const grossAmount = calculate.multiply(quantity, unitPrice);
+
+  //     // 2️⃣ Value excluding Sales Tax (after discount)
+  //     const valueSalesExcludingST = calculate.subtract(grossAmount, discount);
+
+  //     // 3️⃣ Find selected rate option
+  //     const rateOption = rateOptions?.find(
+  //       (opt) => opt.value === values.rate
   //     );
-  //     if (response.data.success && response.data.result.validationResponse.status == "Valid") {
-  //       message.success(translate("Invoice successfully submitted!"), 10);
-  //       const clientId = clientData?.find(opt => opt.name === values.buyerBusinessName)?._id || values.buyerBusinessName; // Fallback to ID if not found
-  //       values.buyerBusinessName = clientId;
-  //       onFinish(values);
 
-  //     } else {
-  //       const errorMessage =
-  //         response.data.result.validationResponse.error ||
-  //         response.data.result.validationResponse.invoiceStatuses?.[0]?.error ||
-  //         response.data.message ||
-  //         "Unknown error";
-  //       message.error(translate("Failed to submit invoice: " + errorMessage), 10);
+  //     // 4️⃣ Sales Tax calculation (Exempt-safe)
+  //     let salesTaxApplicable = 0;
+
+  //     if (!isExemptRate(rateOption)) {
+  //       const rateNum = parseFloat(rateOption?.label || 0) / 100;
+
+  //       if (!Number.isNaN(rateNum) && rateNum > 0) {
+  //         salesTaxApplicable = Number.parseFloat(
+  //           calculate.multiply(valueSalesExcludingST, rateNum)
+  //         );
+  //       }
   //     }
 
+  //     // 5️⃣ Value including Sales Tax
+  //     const valueSalesIncludingST = calculate.add(
+  //       valueSalesExcludingST,
+  //       salesTaxApplicable
+  //     );
+
+  //     // 6️⃣ Update form values
+  //     formInstance.setFieldsValue({
+  //       valueSalesExcludingST: Number.parseFloat(valueSalesExcludingST),
+  //       salesTax: salesTaxApplicable,
+  //       valueSalesIncludingST: Number.parseFloat(valueSalesIncludingST),
+  //       totalValues: Number.parseFloat(valueSalesIncludingST),
+  //     });
+
   //   } catch (error) {
-  //     console.error('Error submitting invoice:', error);
-  //     message.error(translate('Failed to submit invoice due to a network or server error'), 10);
+  //     // Safe fallback
+  //     formInstance.setFieldsValue({
+  //       valueSalesExcludingST: 0,
+  //       salesTax: 0,
+  //       valueSalesIncludingST: 0,
+  //       totalValues: 0,
+  //     });
   //   }
   // };
 
-
   const calculateItemValues = async (formInstance) => {
     try {
-      // Add 'discount' to the fields being validated
-      const values = await formInstance.validateFields(['quantity', 'unitPrice', 'rate', 'discount']);
+      const values = await formInstance.validateFields([
+        "quantity",
+        "unitPrice",
+        "rate",
+        "discount",
+      ]);
 
-      const quantity = values.quantity || 0;
-      const unitPrice = values.unitPrice || 0;
-      const discount = values.discount || 0; // Get discount value
+      const quantity = Number(values.quantity || 0);
+      const unitPrice = Number(values.unitPrice || 0);
+      const discount = Number(values.discount || 0);
 
-      // Calculate value excluding ST (with discount applied)
+      // ✅ Gross
       const grossAmount = calculate.multiply(quantity, unitPrice);
-      const valueSalesExcludingST = grossAmount - discount;
 
-      // Calculate sales tax
-      const rateDesc = rateOptions?.find(opt => opt.value === values.rate)?.label || '0%';
-      const rateNum = parseFloat(rateDesc) / 100;
-      const salesTaxApplicable = Number.parseFloat(calculate.multiply(valueSalesExcludingST, rateNum));
+      // ✅ After discount
+      const valueSalesExcludingST = calculate.subtract(grossAmount, discount);
 
-      // Calculate value including ST
-      const valueSalesIncludingST = calculate.add(valueSalesExcludingST, salesTaxApplicable);
+      // ✅ SAFE TAX
+      const rateOption = rateOptions?.find(
+        opt => opt.value === values.rate
+      );
 
-      // Update form fields
+      const taxRate = getSafeTaxRate(rateOption);
+
+      const salesTaxApplicable =
+        taxRate > 0
+          ? Number.parseFloat(
+            calculate.multiply(valueSalesExcludingST, taxRate)
+          )
+          : 0;
+
+      // ✅ Final value
+      const valueSalesIncludingST = calculate.add(
+        valueSalesExcludingST,
+        salesTaxApplicable
+      );
+
       formInstance.setFieldsValue({
         valueSalesExcludingST: Number.parseFloat(valueSalesExcludingST),
         salesTax: salesTaxApplicable,
@@ -591,7 +773,7 @@ export default function InvoiceForm({ subTotal = 0, offerTotal = 0, current = nu
       });
 
     } catch (error) {
-      // Validation might fail if fields are empty, that's okay
+      // Safe fallback
       formInstance.setFieldsValue({
         valueSalesExcludingST: 0,
         salesTax: 0,
@@ -642,6 +824,9 @@ export default function InvoiceForm({ subTotal = 0, offerTotal = 0, current = nu
       }
     }
   };
+
+  const exempt = isExemptRate(rateOptions?.find(opt => opt.value === itemForm.getFieldValue("rate")));
+
 
   return (
     <div className="container mx-auto p-4">
@@ -1001,7 +1186,7 @@ export default function InvoiceForm({ subTotal = 0, offerTotal = 0, current = nu
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Form.Item name="extraTax" label={translate('Extra Tax')}>
-                <InputNumber min={0} className="w-full" />
+                <InputNumber disabled={exempt} min={0} className="w-full" />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={6}>
