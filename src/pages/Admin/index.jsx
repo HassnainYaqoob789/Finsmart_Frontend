@@ -1,6 +1,7 @@
 import CrudModule from '@/modules/CrudModule/CrudModule';
 import DynamicForm from '@/forms/DynamicForm';
 import { fields } from './config.js';
+import { Tag } from 'antd';
 
 import useLanguage from '@/locale/useLanguage';
 import AdminForm from '@/forms/AdminForm.jsx';
@@ -19,8 +20,17 @@ export default function Admin() {
     DATATABLE_TITLE: 'Admin List',
     ADD_NEW_ENTITY: "Add Admin",
     ENTITY_NAME: "Admin",
+    DELETE_ENTITY: "Deactive",
+    UPDATE_ENTITY: "Update",
   };
- 
+
+  const configPage = {
+    entity,
+    ...Labels,
+    deleteMessage: "Are you sure you want to deactive ",
+    modalTitle: "Status Change Confirmation",
+  };
+
 
   const readColumns = [
     {
@@ -42,70 +52,89 @@ export default function Admin() {
     {
       title: 'Scenarios: ',
       dataIndex: 'scenarioIds',
+      render: (scenarioIds) => {
+        return Array.isArray(scenarioIds) && scenarioIds.length > 0
+          ? scenarioIds.map((e) => e.scenarioId).join(', ')
+          : 'N/A';
+      },
     },
     {
       title: 'Sandbox Token: ',
       dataIndex: 'sandbox_token',
+      render: (_, record) => {
+        return record.Creds && record.Creds.length > 0 && record?.Creds[0]?.sandbox_token || 'N/A';
+      },
     },
     {
       title: 'Production Token: ',
       dataIndex: 'production_token',
+      render: (_, record) => {
+        return record.Creds && record.Creds.length > 0 && record?.Creds[0]?.production_token || 'N/A';
+      },
     },
-  
+
   ];
   const dataTableColumns = [
     {
-        title: 'Name',
-        dataIndex: 'name',
-         render: (_, record) => {
-          return <>{record.name + ' ' + record.surname}</>;
-        },
+      title: 'Name',
+      dataIndex: 'name',
+      render: (_, record) => {
+        return <>{record.name + ' ' + record.surname}</>;
       },
-      {
-        title: 'Email',
-        dataIndex: 'email',
+    },
+    {
+      title: 'Email',
+      dataIndex: 'email',
+    },
+    {
+      title: 'NTN',
+      dataIndex: 'ntn',
+    },
+    {
+      title: 'Address',
+      dataIndex: 'address',
+      render: (_, record) => {
+        return <>{record.address + ', ' + record.province}</>;
       },
-      {
-        title: 'NTN',
-        dataIndex: 'ntn',
+    },
+    {
+      title: 'Scenarios',
+      dataIndex: 'Scenarios',
+      render: (_, record) => {
+        return <>{record?.scenarioIds && record?.scenarioIds.length > 0 && (
+          record?.scenarioIds.map((e) => e.scenarioId).join(', ')
+        ) || 'N/A'}</>;
       },
-      {
-        title: 'Address',
-        dataIndex: 'address',
-         render: (_, record) => {
-          return <>{record.address + ', ' + record.province}</>;
-        },
+    },
+    {
+      title: 'Sandbox Token',
+      dataIndex: 'sandbox_token',
+      render: (_, record) => {
+        return <>{record.Creds && record.Creds.length > 0 && record?.Creds[0]?.sandbox_token || 'N/A'}</>;
       },
-      {
-        title: 'Scenarios',
-        dataIndex: 'Scenarios',
-         render: (_, record) => {
-          return <>{record?.scenarioIds && record?.scenarioIds.length > 0 && (
-                record?.scenarioIds.map((e) => e.scenarioId).join(', ') 
-            )|| 'N/A'}</>;
-        },
+    },
+    {
+      title: 'Production Token',
+      dataIndex: 'production_token',
+      render: (_, record) => {
+        return <>{record.Creds && record.Creds.length > 0 && record?.Creds[0]?.production_token || 'N/A'}</>;
       },
-       {
-        title: 'Sandbox Token',
-        dataIndex: 'sandbox_token',
-         render: (_, record) => {
-          return <>{record.Creds && record.Creds.length > 0 && record?.Creds[0]?.sandbox_token || 'N/A'}</>;
-        },
+    },
+    {
+      title: 'Status',
+      dataIndex: 'enabled',
+      render: (_, record) => {
+        return (
+          <Tag color={record.enabled ? 'green' : 'red'}>
+            {record.enabled ? 'Active' : 'Deactive'}
+          </Tag>
+        );
       },
-      {
-        title: 'Production Token',
-        dataIndex: 'production_token',
-         render: (_, record) => {
-          return <>{record.Creds && record.Creds.length > 0 && record?.Creds[0]?.production_token || 'N/A'}</>;
-        },
-      },
-       
+    },
+
   ];
 
-  const configPage = {
-    entity,
-    ...Labels,
-  };
+
 
 
   const config = {

@@ -61,7 +61,7 @@ function SidePanelTopContent({ config, formElements, withUpload }) {
             size="small"
             style={{ float: 'right', marginLeft: '5px', marginTop: '10px' }}
           >
-            {translate('remove')}
+            {config?.DELETE_ENTITY || translate('remove')}
           </Button>
           <Button
             onClick={editItem}

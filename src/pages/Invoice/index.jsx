@@ -20,89 +20,94 @@ export default function Invoice() {
   const deleteModalLabels = ['number', 'client.name'];
   const dataTableColumns = [
     {
-      title: translate('FbrInvoiceNo'),
-      dataIndex: 'FbrInvoiceNo',
-      render: (text) => text || 'Invoice not Submitted to FBR',
-      width: 200, // Optional: Adjust width for better display
+      title: translate('Number'),
+      dataIndex: 'invoiceRefNo',
     },
     {
       title: translate('Client'),
       dataIndex: ['buyerBusinessName', 'name'],
     },
     {
-      title: translate('Invoice Date'),
+      title: translate('NTN/CNIC'),
+      dataIndex: 'buyerNTNCNIC',
+    },
+    {
+      title: translate('Date'),
       dataIndex: 'invoiceDate',
-      render: (date) => (
-        date ? dayjs(date).format('DD MMM YYYY') : '-'
-      ),
-    },
-      {
-      title: translate('Created At'),
-      dataIndex: 'created',
-      render: (date) => (
-        date ? dayjs(date).format('DD MMM YYYY, hh:mm A') : '-'
-      ),
-    },
-
-    {
-      title: translate('Scenario'),
-      dataIndex: 'scenarioId',
+      render: (date) => (date ? dayjs(date).format('DD MMM YYYY') : '-'),
     },
     {
-      title: translate('invoiceRefNo'),
-      dataIndex: 'invoiceRefNo',
+      title: translate('Mode'),
+      dataIndex: 'mode',
+      render: (mode) => {
+        const color = mode === 'production' ? 'green' : 'orange';
+        return <Tag color={color}>{mode?.toUpperCase() || 'SANDBOX'}</Tag>;
+      },
     },
     {
-      title: translate('invoiceType'),
-      dataIndex: 'invoiceType',
+      title: translate('FbrInvoiceNo'),
+      dataIndex: 'FbrInvoiceNo',
+      render: (text) => text || 'Not Submitted',
+      width: 200,
     },
-
+    {
+      title: translate('FBR'),
+      dataIndex: 'fbrsubmit',
+      render: (fbrsubmit) => {
+        const color = fbrsubmit ? 'green' : 'red';
+        return <Tag color={color}>{fbrsubmit ? 'Submitted' : 'Pending'}</Tag>;
+      },
+    },
+    {
+      title: translate('Sub Total'),
+      dataIndex: 'subTotal',
+      onCell: () => ({
+        style: { textAlign: 'right', whiteSpace: 'nowrap', direction: 'ltr' },
+      }),
+      render: (total, record) => moneyFormatter({ amount: total, currency_code: record.currency }),
+    },
+    {
+      title: translate('Tax'),
+      dataIndex: 'taxTotal',
+      onCell: () => ({
+        style: { textAlign: 'right', whiteSpace: 'nowrap', direction: 'ltr' },
+      }),
+      render: (total, record) => moneyFormatter({ amount: total, currency_code: record.currency }),
+    },
     {
       title: translate('Total'),
       dataIndex: 'total',
-      onCell: () => {
-        return {
-          style: {
-            textAlign: 'right',
-            whiteSpace: 'nowrap',
-            direction: 'ltr',
-          },
-        };
-      },
-      render: (total, record) => {
-        return moneyFormatter({ amount: total, currency_code: record.currency });
-      },
-    },
-    {
-      title: translate('paid'),
-      dataIndex: 'credit',
-      onCell: () => {
-        return {
-          style: {
-            textAlign: 'right',
-            whiteSpace: 'nowrap',
-            direction: 'ltr',
-          },
-        };
-      },
+      onCell: () => ({
+        style: { textAlign: 'right', whiteSpace: 'nowrap', direction: 'ltr' },
+      }),
       render: (total, record) => moneyFormatter({ amount: total, currency_code: record.currency }),
     },
     {
       title: translate('Status'),
       dataIndex: 'status',
-      render: (total, record) => (
-        <span>{translate(total)}</span>
-      ),
-
+      render: (status) => {
+        const tag = tagColor(status);
+        return (
+          <Tag color={tag.color}>
+            {tag.icon} {translate(tag.label)?.toUpperCase()}
+          </Tag>
+        );
+      },
     },
     {
       title: translate('Payment'),
       dataIndex: 'paymentStatus',
-      render: (total, record) => (
-        <span>{translate(total)}</span>
-      ),
+      render: (paymentStatus) => {
+        const tag = tagColor(paymentStatus);
+        return (
+          <Tag color={tag.color}>
+            {tag.icon} {translate(tag.label)?.toUpperCase()}
+          </Tag>
+        );
+      },
     },
   ];
+
 
   const Labels = {
     PANEL_TITLE: translate('invoice'),

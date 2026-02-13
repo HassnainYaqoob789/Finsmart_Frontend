@@ -79,7 +79,7 @@ export default function DataTable({ config, extra = [] }) {
     },
 
     {
-      label: translate("Delete"),
+      label: config?.DELETE_ENTITY || translate("Delete"),
       key: "delete",
       icon: <DeleteOutlined />,
     },

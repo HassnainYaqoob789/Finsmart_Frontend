@@ -1,5 +1,5 @@
 import React from "react";
-import { Form, Input, Checkbox } from "antd";
+import { Form, Input, Checkbox, Select } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
 import useLanguage from "@/locale/useLanguage";
 // import "./LoginForm.css";
@@ -33,6 +33,21 @@ export default function LoginForm() {
           placeholder="Password"
           size="large"
           className="simple-input"
+        />
+      </Form.Item>
+
+      <Form.Item
+        name="mode"
+        initialValue="sandbox"
+        rules={[{ required: true, message: "Please select mode" }]}
+      >
+        <Select
+          size="large"
+          className="simple-input"
+          options={[
+            { value: 'sandbox', label: 'Sandbox Token' },
+            { value: 'production', label: 'Production Token' },
+          ]}
         />
       </Form.Item>
 

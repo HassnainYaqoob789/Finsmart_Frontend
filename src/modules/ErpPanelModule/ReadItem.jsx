@@ -131,9 +131,8 @@ export default function ReadItem({ config, selectedItem }) {
         onBack={() => {
           navigate(`/${entity.toLowerCase()}`);
         }}
-        title={`${ENTITY_NAME} # ${currentErp.invoiceRefNo}/${
-          currentErp.year || ""
-        }`}
+        title={`${ENTITY_NAME} # ${currentErp.invoiceRefNo}/${currentErp.year || ""
+          }`}
         ghost={false}
         tags={[
           <span
@@ -182,26 +181,26 @@ export default function ReadItem({ config, selectedItem }) {
           >
             {translate("Close")}
           </Button>,
-          // <Button
-          //   key={`${uniqueId()}`}
-          //   onClick={() => {
-          //     window.open(
-          //       `${DOWNLOAD_BASE_URL}${entity}/${currentErp.pdf}`,
-          //       "_blank"
-          //     );
-          //   }}
-          //   style={{
-          //     borderRadius: "8px",
-          //     fontWeight: 600,
-          //     letterSpacing: "0.5px",
-          //     boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          //     backgroundColor: "#43A047",
-          //     color: "#FFFFFF",
-          //   }}
-          //   icon={<FilePdfOutlined />}
-          // >
-          //   {translate("Download PDF")}
-          // </Button>,
+          <Button
+            key={`${uniqueId()}`}
+            onClick={() => {
+              window.open(
+                `${DOWNLOAD_BASE_URL}${entity}/${currentErp.pdf}`,
+                "_blank"
+              );
+            }}
+            style={{
+              borderRadius: "8px",
+              fontWeight: 600,
+              letterSpacing: "0.5px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              backgroundColor: "#43A047",
+              color: "#FFFFFF",
+            }}
+            icon={<FilePdfOutlined />}
+          >
+            {translate("Download PDF")}
+          </Button>,
           <Button
             key={`${uniqueId()}`}
             onClick={() => {

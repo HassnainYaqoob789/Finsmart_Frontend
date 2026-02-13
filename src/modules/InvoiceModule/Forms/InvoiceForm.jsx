@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { Form, Input, InputNumber, Button, Select, Divider, Row, Col, Table, Tooltip, Spin, message, Switch } from 'antd';
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { Form, Input, InputNumber, Button, Select, Divider, Row, Col, Table, Tooltip, Spin, message, Switch, Modal } from 'antd';
+import { DeleteOutlined, PlusOutlined, CheckCircleFilled } from '@ant-design/icons';
 import { DatePicker } from 'antd';
 import MoneyInputFormItem from '@/components/MoneyInputFormItem';
 import { selectFinanceSettings } from '@/redux/settings/selectors';
@@ -44,6 +44,7 @@ export default function InvoiceForm({ subTotal = 0, offerTotal = 0, current = nu
   const itemForm = Form.useForm()[0];
   const authData = storePersist.get("auth");
   const [fbrsubmit, setFbrsubmit] = useState(false);
+  const [isFormLoading, setIsFormLoading] = useState(false);
 
   const currentAdmin = useSelector(selectCurrentAdmin);
 
@@ -262,14 +263,20 @@ export default function InvoiceForm({ subTotal = 0, offerTotal = 0, current = nu
 
 
 
-  const handleClient = (value) => {
+  const handleClient = async (value) => {
     const selectedClient = clientData.find(client => client.name === value);
     if (selectedClient) {
+      const buyerNTN = selectedClient['NTN#'] || '';
       form.setFieldsValue({
         buyerProvince: selectedClient?.province?.toUpperCase() || '',
-        buyerNTNCNIC: selectedClient['NTN#'] || '',
+        buyerNTNCNIC: buyerNTN,
         buyerAddress: selectedClient.address || selectedClient['Test Address'] || '',
       });
+
+      // Automatically verify NTN if it exists
+      if (buyerNTN) {
+        await verifyBuyerNTN(null, true);
+      }
     } else {
       form.setFieldsValue({
         buyerProvince: '',
@@ -556,44 +563,77 @@ export default function InvoiceForm({ subTotal = 0, offerTotal = 0, current = nu
     { title: 'Discount', dataIndex: 'discount', width: 100 },
   ];
 
-  const handleEnterPress = async (e) => {
-    e.preventDefault();
+  const verifyBuyerNTN = async (e, isFormWide = false) => {
+    if (e) e.preventDefault();
+
+    const setLoader = isFormWide ? setIsFormLoading : setIsFetchingRegistration;
+
     try {
       await form.validateFields(['buyerNTNCNIC']);
-      const buyerNTNCNIC = form.getFieldValue('buyerNTNCNIC') || e.target.value;
+      const buyerNTNCNIC = form.getFieldValue('buyerNTNCNIC');
 
       if (!buyerNTNCNIC) {
-        message.error(translate('Please enter a valid NTN/CNIC'), 10);
+        if (!isFormWide) message.error(translate('Please enter a valid NTN/CNIC'), 10);
         return;
       }
 
-      setIsFetchingRegistration(true);
+      setLoader(true);
       try {
         const response = await axios.get(`${API_BASE_URL}user-fbr/regType?reg_no=${buyerNTNCNIC}`, {
           headers: { Authorization: `Bearer ${authData?.current?.token}` },
         });
 
         if (response.data.success && response.data.result) {
-          const registrationType = response.data.result.REGISTRATION_TYPE?.toLowerCase() || '';
+          const rawRegType = response.data.result.REGISTRATION_TYPE || '';
+          const registrationType = rawRegType.charAt(0).toUpperCase() + rawRegType.slice(1).toLowerCase();
+
           form.setFieldsValue({ buyerRegistrationType: registrationType });
-          message.success(translate(`Buyer Registration Type set to: ${registrationType}`), 10);
-        } else {
-          message.warning(translate('No registration type found for this NTN/CNIC'), 10);
+
+          Modal.success({
+            title: (
+              <span style={{ color: '#52c41a', fontWeight: 'bold', fontSize: '18px' }}>
+                {translate('FBR Verification Successful')}
+              </span>
+            ),
+            icon: <CheckCircleFilled style={{ color: '#52c41a' }} />,
+            content: (
+              <div style={{ marginTop: '16px', padding: '12px', background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: '8px' }}>
+                <div style={{ marginBottom: '8px' }}>
+                  <span style={{ color: '#8c8c8c' }}>{translate('Registration Number')}:</span>
+                  <div style={{ fontWeight: '600', fontSize: '16px', color: '#262626' }}>{response.data.result.REGISTRATION_NO}</div>
+                </div>
+                <div>
+                  <span style={{ color: '#8c8c8c' }}>{translate('FBR Registration Type')}:</span>
+                  <div style={{ fontWeight: '600', fontSize: '16px', color: '#262626' }}>{registrationType}</div>
+                </div>
+              </div>
+            ),
+            okText: translate('Continue'),
+            okButtonProps: { style: { background: '#52c41a', borderColor: '#52c41a' } },
+          });
+        } else if (!isFormWide) {
+          Modal.warning({
+            title: translate('Verification Failed'),
+            content: translate('No registration type found for this NTN/CNIC'),
+          });
         }
       } catch (error) {
         console.error('Error fetching Buyer Registration Type:', error);
-        message.error(translate('Failed to fetch Buyer Registration Type'), 10);
+        if (!isFormWide) message.error(translate('Failed to fetch Buyer Registration Type'), 10);
       } finally {
-        setIsFetchingRegistration(false);
+        setLoader(false);
       }
     } catch (error) {
       console.error('Validation failed:', error);
-      message.error(translate('Please enter a valid NTN/CNIC'), 10);
+      if (!isFormWide) message.error(translate('Please enter a valid NTN/CNIC'), 10);
     }
   };
 
   const handleFormSubmit = async (values) => {
     try {
+      if (authData?.current?.mode === 'production') {
+        delete values.scenarioId;
+      }
       const { saleType, ...restValues } = values;
 
       const fbrItems = items.map(({ productId, productDescription, ...rest }) => ({
@@ -830,150 +870,153 @@ export default function InvoiceForm({ subTotal = 0, offerTotal = 0, current = nu
 
   return (
     <div className="container mx-auto p-4">
-      <Form
-        form={form}
-        layout="vertical"
-        onValuesChange={handleFormValuesChange}
-        onFinish={handleFormSubmit}
-        className="space-y-6"
-      >
-        <Col xs={24} sm={12} md={6} lg={4}>
-          <div style={{ padding: '8px 0', background: '#f0f9ff', borderRadius: 8, border: '1px solid #bae6fd' }}>
-            <Tooltip
-              title="If this is turned ON, the invoice will be submitted to FBR (Federal Board of Revenue). You must first validate using the 'Validate FBR Invoice' button before saving."
-              placement="topLeft"
-            >
-              <Form.Item
-                name="fbrsubmit"
-                label={<span style={{ fontWeight: 600 }}>FBR Submission</span>}
-                valuePropName="checked"
-                style={{ margin: '0 12px' }}
+      <Spin spinning={isFormLoading} size="large" tip={translate('Verifying FBR Registration...')}>
+        <Form
+          form={form}
+          layout="vertical"
+          onValuesChange={handleFormValuesChange}
+          onFinish={handleFormSubmit}
+          className="space-y-6"
+        >
+          <Col xs={24} sm={12} md={6} lg={4}>
+            <div style={{ padding: '8px 0', background: '#f0f9ff', borderRadius: 8, border: '1px solid #bae6fd' }}>
+              <Tooltip
+                title="If this is turned ON, the invoice will be submitted to FBR (Federal Board of Revenue). You must first validate using the 'Validate FBR Invoice' button before saving."
+                placement="topLeft"
               >
-                <Switch
-                  checked={fbrsubmit}
-                  onChange={handleToggle}
-                  checkedChildren="YES - Submit to FBR"
-                  unCheckedChildren="NO"
-                  size="default"
-                />
-              </Form.Item>
-            </Tooltip>
-          </div>
-        </Col>
-        <Divider className="bg-teal-600 text-white font-bold text-lg py-2 rounded">
-          {translate('Buyer Seller Detail')}
-        </Divider>
+                <Form.Item
+                  name="fbrsubmit"
+                  label={<span style={{ fontWeight: 600 }}>FBR Submission</span>}
+                  valuePropName="checked"
+                  style={{ margin: '0 12px' }}
+                >
+                  <Switch
+                    checked={fbrsubmit}
+                    onChange={handleToggle}
+                    checkedChildren="YES - Submit to FBR"
+                    unCheckedChildren="NO"
+                    size="default"
+                  />
+                </Form.Item>
+              </Tooltip>
+            </div>
+          </Col>
+          <Divider className="bg-teal-600 text-white font-bold text-lg py-2 rounded">
+            {translate('Buyer Seller Detail')}
+          </Divider>
 
-        <Row gutter={[16, 16]}>
-          <Col xs={24} sm={12} md={8}>
-            <Form.Item
-              name="invoiceDate"
-              label={translate('Invoice Date')}
-              rules={[{ required: true, type: 'object', message: 'Please select a valid date' }]}
-              initialValue={dayjs()}
-            >
-              <DatePicker className="w-full" format="YYYY-MM-DD" />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Form.Item name="invoiceType" label={translate('Invoice Type')} rules={[{ required: true }]}>
-              <Select placeholder="Select Invoice Type" options={InvoiceTypesOptions} className="w-full" />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Form.Item name="invoiceRefNo" label={translate('Invoice Ref No.')}>
-              <Input placeholder="Enter Invoice Ref No" />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Form.Item name="scenarioId" label={translate('Scenario ID')} initialValue={undefined}>
-              <Select
-                placeholder="Select Scenario ID"
-                showSearch
-                optionFilterProp="children"
-                filterOption={(input, option) =>
-                  option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
-                }
-                className="w-full"
+          <Row gutter={[16, 16]}>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item
+                name="invoiceDate"
+                label={translate('Invoice Date')}
+                rules={[{ required: true, type: 'object', message: 'Please select a valid date' }]}
+                initialValue={dayjs()}
               >
-                {currentAdmin?.scenarioIds?.map((item) => (
-                  <Select.Option key={item.scenarioId} value={item.scenarioId}>
-                    {item.scenarioId} - {item.description}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Form.Item name="sellerBusinessName" label={translate('Seller Business Name')} rules={[{ required: true }]}>
-              <Input />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Form.Item name="sellerProvince" label={translate('Seller Province')} rules={[{ required: true }]}>
-              <Select
-                placeholder="Select Seller Province"
-                loading={provinceLoading}
-                showSearch
-                optionFilterProp="children"
-                className="w-full"
-              >
-                {provinceData?.map((item) => (
-                  <Select.Option key={item.stateProvinceDesc} value={item.stateProvinceDesc}>
-                    {item.stateProvinceDesc}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Form.Item name="sellerNTNCNIC" label={translate('Seller NTN/CNIC')} rules={[{ required: true }]}>
-              <Input placeholder="Enter Seller NTN/CNIC" />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Form.Item name="sellerAddress" label={translate('Seller Address')} rules={[{ required: true }]}>
-              <Input />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Form.Item name="buyerBusinessName" label={translate('Buyer Business Name')} rules={[{ required: true }]}>
-              <Select
-                placeholder="Select Buyer Business Name"
-                loading={clientLoading}
-                showSearch
-                disabled={provinceLoading}
-                optionFilterProp="children"
-                onChange={handleClient}
-                className="w-full"
-              >
-                {clientData?.map((item) => (
-                  <Select.Option key={item.name} value={item.name}>
-                    {item.name}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Form.Item name="buyerProvince" label={translate('Buyer Province')} rules={[{ required: true }]}>
-              <Select
-                placeholder="Select Buyer Province"
-                loading={provinceLoading}
-                showSearch
-                optionFilterProp="children"
-                className="w-full"
-              >
-                {provinceData?.map((item) => (
-                  <Select.Option key={item.stateProvinceDesc} value={item.stateProvinceDesc}>
-                    {item.stateProvinceDesc}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            {/* <Form.Item name="buyerNTNCNIC" label={translate('Buyer NTN/CNIC')}>
+                <DatePicker className="w-full" format="YYYY-MM-DD" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="invoiceType" label={translate('Invoice Type')} rules={[{ required: true }]}>
+                <Select placeholder="Select Invoice Type" options={InvoiceTypesOptions} className="w-full" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="invoiceRefNo" label={translate('Invoice Ref No.')}>
+                <Input placeholder="Enter Invoice Ref No" />
+              </Form.Item>
+            </Col>
+            {authData?.current?.mode !== 'production' && (
+              <Col xs={24} sm={12} md={8}>
+                <Form.Item name="scenarioId" label={translate('Scenario ID')} initialValue={undefined}>
+                  <Select
+                    placeholder="Select Scenario ID"
+                    showSearch
+                    optionFilterProp="children"
+                    filterOption={(input, option) =>
+                      option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+                    }
+                    className="w-full"
+                  >
+                    {currentAdmin?.scenarioIds?.map((item) => (
+                      <Select.Option key={item.scenarioId} value={item.scenarioId}>
+                        {item.scenarioId} - {item.description}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+            )}
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="sellerBusinessName" label={translate('Seller Business Name')} rules={[{ required: true }]}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="sellerProvince" label={translate('Seller Province')} rules={[{ required: true }]}>
+                <Select
+                  placeholder="Select Seller Province"
+                  loading={provinceLoading}
+                  showSearch
+                  optionFilterProp="children"
+                  className="w-full"
+                >
+                  {provinceData?.map((item) => (
+                    <Select.Option key={item.stateProvinceDesc} value={item.stateProvinceDesc}>
+                      {item.stateProvinceDesc}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="sellerNTNCNIC" label={translate('Seller NTN/CNIC')} rules={[{ required: true }]}>
+                <Input placeholder="Enter Seller NTN/CNIC" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="sellerAddress" label={translate('Seller Address')} rules={[{ required: true }]}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="buyerBusinessName" label={translate('Buyer Business Name')} rules={[{ required: true }]}>
+                <Select
+                  placeholder="Select Buyer Business Name"
+                  loading={clientLoading}
+                  showSearch
+                  disabled={provinceLoading}
+                  optionFilterProp="children"
+                  onChange={handleClient}
+                  className="w-full"
+                >
+                  {clientData?.map((item) => (
+                    <Select.Option key={item.name} value={item.name}>
+                      {item.name}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="buyerProvince" label={translate('Buyer Province')} rules={[{ required: true }]}>
+                <Select
+                  placeholder="Select Buyer Province"
+                  loading={provinceLoading}
+                  showSearch
+                  optionFilterProp="children"
+                  className="w-full"
+                >
+                  {provinceData?.map((item) => (
+                    <Select.Option key={item.stateProvinceDesc} value={item.stateProvinceDesc}>
+                      {item.stateProvinceDesc}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              {/* <Form.Item name="buyerNTNCNIC" label={translate('Buyer NTN/CNIC')}>
               <Tooltip title="Please enter NTN/CNIC then press Enter to get Buyer Registration Type">
                 <Input
                   value={form.getFieldValue('buyerNTNCNIC')}
@@ -986,297 +1029,309 @@ export default function InvoiceForm({ subTotal = 0, offerTotal = 0, current = nu
               </Tooltip>
             </Form.Item> */}
 
-            <Tooltip title="Please enter NTN/CNIC then press Enter to get Buyer Registration Type">
-              <Form.Item
-                name="buyerNTNCNIC"
-                label={translate('Buyer NTN/CNIC')}
-                rules={[{ required: true }]}
-              >
-                <Input
-                  placeholder={translate('Enter Buyer NTN/CNIC')}
-                  onPressEnter={handleEnterPress}
-                  disabled={isFetchingRegistration}
-                  suffix={isFetchingRegistration ? <Spin size="small" /> : null}
-                />
-              </Form.Item>
-            </Tooltip>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Form.Item name="buyerAddress" label={translate('Buyer Address')} rules={[{ required: true }]}>
-              <Input placeholder="Enter Buyer Address" />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} md={8}>
-            <Form.Item name="buyerRegistrationType" label={translate('Buyer Registration Type')} rules={[{ required: true }]}>
-              <Select placeholder="Select Buyer Registration Type" options={buyerRegistrationTypeOptions} className="w-full" />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} md={6}>
-            <Form.Item
-              name="saleType"
-              label={translate('Sale Type')}
-              rules={[{ required: true, message: "Please select Sale Type" }]}
-            >
-              <Select
-                placeholder="Select Sale Type"
-                loading={saleTypeLoading}
-                showSearch
-                optionFilterProp="children"
-                onChange={(value) =>
-                  handleDynamicChange({
-                    value,
-                    fieldKey: "rate",
-                    optionsDataSet: setrateOptions,
-                    optionLoading: setRateLoading,
-                    api_route: "user-fbr/saletypeByRate",
-                    api_route_params_key: "saletype",
-                    field_value: "ratE_ID",
-                    field_label: "ratE_DESC",
-                  })
-                }
-                className="w-full"
-              >
-                {saleTypeData?.map((item) => (
-                  <Select.Option key={item.transactioN_TYPE_ID} value={item.transactioN_TYPE_ID}>
-                    {item.transactioN_DESC}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Col>
-
-
-        </Row>
-
-        <Divider className="bg-teal-600 text-white font-bold text-lg py-2 rounded">
-          {translate('Item Detail')}
-        </Divider>
-
-        <Form form={itemForm} layout="vertical" disabled={isItemFormDisabled}>
-          <Row gutter={[16, 16]}>
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="productDescription" label={translate('Product')} rules={[{ required: true }]}>
-                <Select
-                  placeholder="Select Product"
-                  loading={productLoading}
-                  showSearch
-                  optionFilterProp="children"
-                  onChange={handleProductChange} // Add this onChange handler
-                  className="w-full"
+              <Tooltip title="Enter NTN/CNIC then click Verify or press Enter">
+                <Form.Item
+                  name="buyerNTNCNIC"
+                  label={translate('Buyer NTN/CNIC')}
+                  rules={[{ required: true }]}
                 >
-                  {products?.map((item) => (
-                    <Select.Option key={item._id} value={item._id}>
-                      {item["Product Name"]}
-                    </Select.Option>
-                  ))}
-                </Select>
+                  <Input
+                    placeholder={translate('Enter Buyer NTN/CNIC')}
+                    onPressEnter={verifyBuyerNTN}
+                    disabled={isFetchingRegistration}
+                    suffix={isFetchingRegistration ? <Spin size="small" /> : null}
+                    addonAfter={
+                      <Button
+                        type="primary"
+                        size="small"
+                        onClick={() => verifyBuyerNTN()}
+                        loading={isFetchingRegistration}
+                        style={{ border: 'none', background: 'transparent', color: '#1890ff', fontWeight: 'bold', boxShadow: 'none' }}
+                      >
+                        {translate('Verify')}
+                      </Button>
+                    }
+                  />
+                </Form.Item>
+              </Tooltip>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="buyerAddress" label={translate('Buyer Address')} rules={[{ required: true }]}>
+                <Input placeholder="Enter Buyer Address" />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12} md={8}>
+              <Form.Item name="buyerRegistrationType" label={translate('Buyer Registration Type')} rules={[{ required: true }]}>
+                <Select placeholder="Select Buyer Registration Type" options={buyerRegistrationTypeOptions} className="w-full" />
               </Form.Item>
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Form.Item
-                name="hsCode"
-                label={translate('HS Code')}
-                rules={[{ required: true, message: "Please select HS Code" }]}
+                name="saleType"
+                label={translate('Sale Type')}
+                rules={[{ required: true, message: "Please select Sale Type" }]}
               >
                 <Select
-                  placeholder="Select HS Code"
-                  loading={hSLoading}
+                  placeholder="Select Sale Type"
+                  loading={saleTypeLoading}
                   showSearch
                   optionFilterProp="children"
                   onChange={(value) =>
                     handleDynamicChange({
                       value,
-                      fieldKey: "uoM",
-                      optionsDataSet: setUomOptions,
-                      optionLoading: setUomLoading,
-                      api_route: "user-fbr/uombyhscode",
-                      api_route_params_key: "hs_code",
-                      field_value: "description",
-                      field_label: "description",
+                      fieldKey: "rate",
+                      optionsDataSet: setrateOptions,
+                      optionLoading: setRateLoading,
+                      api_route: "user-fbr/saletypeByRate",
+                      api_route_params_key: "saletype",
+                      field_value: "ratE_ID",
+                      field_label: "ratE_DESC",
                     })
                   }
                   className="w-full"
                 >
-                  {hsCodes?.map((item) => (
-                    <Select.Option key={item.hS_CODE} value={item.hS_CODE}>
-                      {`${item.hS_CODE} - ${item.description}`}
+                  {saleTypeData?.map((item) => (
+                    <Select.Option key={item.transactioN_TYPE_ID} value={item.transactioN_TYPE_ID}>
+                      {item.transactioN_DESC}
                     </Select.Option>
                   ))}
                 </Select>
               </Form.Item>
             </Col>
 
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="rate" label={translate('Rate')} rules={[{ required: true, message: "Please select Rate" }]}>
-                <Select
-                  onChange={(value) => {
-                    handleDynamicChange({
-                      value,
-                      fieldKey: "sroScheduleNo",
-                      optionsDataSet: setSroOptions,
-                      optionLoading: setSroLoading,
-                      api_route: "user-fbr/sroScheduleByRate",
-                      api_route_params_key: "rate_id",
-                      field_value: "srO_ID",
-                      field_label: "srO_DESC",
-                    });
-                    calculateItemValues(itemForm);
-                  }}
-                  loading={rateLoading}
-                  options={rateOptions}
-                  className="w-full"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="uoM" label={translate('UOM')} rules={[{ required: true }]}>
-                <Select loading={uomLoading} options={uomOptions} className="w-full" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="quantity" label={translate('Quantity')} rules={[{ required: true }]}>
-                <InputNumber
-                  min={0}
-                  className="w-full"
-                  onChange={(value) => calculateItemValues(itemForm)}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="unitPrice" label={translate('Unit Price')} rules={[{ required: true }]}>
-                <InputNumber
-                  min={0}
-                  className="w-full"
-                  onChange={(value) => calculateItemValues(itemForm)}
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="discount" label={translate('Discount')}>
-                <InputNumber min={0} onChange={(value) => calculateItemValues(itemForm)}
-                  className="w-full" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="valueSalesExcludingST" label={translate('Invoice Value before ST')}>
-                <InputNumber min={0} className="w-full" readOnly />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="salesTax" label={translate('Sales Tax')}>
-                <InputNumber min={0} className="w-full" readOnly />
-              </Form.Item>
-            </Col>
-            {/* <Col xs={24} sm={12} md={6}>
+
+          </Row>
+
+          <Divider className="bg-teal-600 text-white font-bold text-lg py-2 rounded">
+            {translate('Item Detail')}
+          </Divider>
+
+          <Form form={itemForm} layout="vertical" disabled={isItemFormDisabled}>
+            <Row gutter={[16, 16]}>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="productDescription" label={translate('Product')} rules={[{ required: true }]}>
+                  <Select
+                    placeholder="Select Product"
+                    loading={productLoading}
+                    showSearch
+                    optionFilterProp="children"
+                    onChange={handleProductChange} // Add this onChange handler
+                    className="w-full"
+                  >
+                    {products?.map((item) => (
+                      <Select.Option key={item._id} value={item._id}>
+                        {item["Product Name"]}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item
+                  name="hsCode"
+                  label={translate('HS Code')}
+                  rules={[{ required: true, message: "Please select HS Code" }]}
+                >
+                  <Select
+                    placeholder="Select HS Code"
+                    loading={hSLoading}
+                    showSearch
+                    optionFilterProp="children"
+                    onChange={(value) =>
+                      handleDynamicChange({
+                        value,
+                        fieldKey: "uoM",
+                        optionsDataSet: setUomOptions,
+                        optionLoading: setUomLoading,
+                        api_route: "user-fbr/uombyhscode",
+                        api_route_params_key: "hs_code",
+                        field_value: "description",
+                        field_label: "description",
+                      })
+                    }
+                    className="w-full"
+                  >
+                    {hsCodes?.map((item) => (
+                      <Select.Option key={item.hS_CODE} value={item.hS_CODE}>
+                        {`${item.hS_CODE} - ${item.description}`}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="rate" label={translate('Rate')} rules={[{ required: true, message: "Please select Rate" }]}>
+                  <Select
+                    onChange={(value) => {
+                      handleDynamicChange({
+                        value,
+                        fieldKey: "sroScheduleNo",
+                        optionsDataSet: setSroOptions,
+                        optionLoading: setSroLoading,
+                        api_route: "user-fbr/sroScheduleByRate",
+                        api_route_params_key: "rate_id",
+                        field_value: "srO_ID",
+                        field_label: "srO_DESC",
+                      });
+                      calculateItemValues(itemForm);
+                    }}
+                    loading={rateLoading}
+                    options={rateOptions}
+                    className="w-full"
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="uoM" label={translate('UOM')} rules={[{ required: true }]}>
+                  <Select loading={uomLoading} options={uomOptions} className="w-full" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="quantity" label={translate('Quantity')} rules={[{ required: true }]}>
+                  <InputNumber
+                    min={0}
+                    className="w-full"
+                    onChange={(value) => calculateItemValues(itemForm)}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="unitPrice" label={translate('Unit Price')} rules={[{ required: true }]}>
+                  <InputNumber
+                    min={0}
+                    className="w-full"
+                    onChange={(value) => calculateItemValues(itemForm)}
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="discount" label={translate('Discount')}>
+                  <InputNumber min={0} onChange={(value) => calculateItemValues(itemForm)}
+                    className="w-full" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="valueSalesExcludingST" label={translate('Invoice Value before ST')}>
+                  <InputNumber min={0} className="w-full" readOnly />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="salesTax" label={translate('Sales Tax')}>
+                  <InputNumber min={0} className="w-full" readOnly />
+                </Form.Item>
+              </Col>
+              {/* <Col xs={24} sm={12} md={6}>
   <Form.Item name="valueSalesIncludingST" label={translate('Value of Sales Incl. ST')}>
     <InputNumber min={0} className="w-full" readOnly />
   </Form.Item>
 </Col> */}
 
 
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="fixedNotifiedValueOrRetailPrice" label={translate('Fixed/Notified Value or Retail Price')}>
-                <InputNumber min={0} className="w-full" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="salesTaxWithheldAtSource" label={translate('ST Withheld at Source')}>
-                <InputNumber min={0} className="w-full" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="extraTax" label={translate('Extra Tax')}>
-                <InputNumber disabled={exempt} min={0} className="w-full" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="furtherTax" label={translate('Further Tax')}>
-                <InputNumber min={0} className="w-full" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="sroScheduleNo" label={translate('SRO/Schedule No')}>
-                <Select
-                  onChange={(value) =>
-                    handleDynamicChange({
-                      value,
-                      fieldKey: "sroItemSerialNo",
-                      optionsDataSet: setItemNoOptions,
-                      optionLoading: setItemNoLoading,
-                      api_route: "user-fbr/sroitem",
-                      api_route_params_key: "sro_id",
-                      field_value: "srO_ITEM_DESC",
-                      field_label: "srO_ITEM_DESC",
-                    })
-                  }
-                  loading={sroLoading}
-                  options={sroOptions}
-                  className="w-full"
-                />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="sroItemSerialNo" label={translate('Item Sr. No.')}>
-                <Select loading={itemNoLoading} options={itemNoOptions} className="w-full" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="fedPayable" label={translate('FED Payable')}>
-                <InputNumber min={0} className="w-full" />
-              </Form.Item>
-            </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="fixedNotifiedValueOrRetailPrice" label={translate('Fixed/Notified Value or Retail Price')}>
+                  <InputNumber min={0} className="w-full" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="salesTaxWithheldAtSource" label={translate('ST Withheld at Source')}>
+                  <InputNumber min={0} className="w-full" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="extraTax" label={translate('Extra Tax')}>
+                  <InputNumber disabled={exempt} min={0} className="w-full" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="furtherTax" label={translate('Further Tax')}>
+                  <InputNumber min={0} className="w-full" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="sroScheduleNo" label={translate('SRO/Schedule No')}>
+                  <Select
+                    onChange={(value) =>
+                      handleDynamicChange({
+                        value,
+                        fieldKey: "sroItemSerialNo",
+                        optionsDataSet: setItemNoOptions,
+                        optionLoading: setItemNoLoading,
+                        api_route: "user-fbr/sroitem",
+                        api_route_params_key: "sro_id",
+                        field_value: "srO_ITEM_DESC",
+                        field_label: "srO_ITEM_DESC",
+                      })
+                    }
+                    loading={sroLoading}
+                    options={sroOptions}
+                    className="w-full"
+                  />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="sroItemSerialNo" label={translate('Item Sr. No.')}>
+                  <Select loading={itemNoLoading} options={itemNoOptions} className="w-full" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="fedPayable" label={translate('FED Payable')}>
+                  <InputNumber min={0} className="w-full" />
+                </Form.Item>
+              </Col>
 
-            <Col xs={24} sm={12} md={6}>
-              <Form.Item name="totalValues" label={translate('Total Invoice Amount')}>
-                <InputNumber min={0} className="w-full" readOnly />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row justify="end" className="mt-4">
-            <Col>
-              <Button
-                type="primary"
-                onClick={handleSaveItem}
-                icon={<PlusOutlined />}
-                disabled={isItemFormDisabled}
-                className="flex items-center"
-              >
-                {translate('Save Item')}
-              </Button>
-            </Col>
-          </Row>
+              <Col xs={24} sm={12} md={6}>
+                <Form.Item name="totalValues" label={translate('Total Invoice Amount')}>
+                  <InputNumber min={0} className="w-full" readOnly />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row justify="end" className="mt-4">
+              <Col>
+                <Button
+                  type="primary"
+                  onClick={handleSaveItem}
+                  icon={<PlusOutlined />}
+                  disabled={isItemFormDisabled}
+                  className="flex items-center"
+                >
+                  {translate('Save Item')}
+                </Button>
+              </Col>
+            </Row>
+          </Form>
+
+          <Divider className="bg-teal-600 text-white font-bold text-lg py-2 rounded">
+            {translate('Items List')}
+          </Divider>
+
+          <Table
+            columns={columns}
+            dataSource={items}
+            pagination={false}
+            rowKey={(record, index) => index}
+            scroll={{ x: 'max-content' }}
+            className="overflow-x-auto"
+          />
+
+          <Form.List name="items">
+            {() => null}
+          </Form.List>
+
+          <Divider className="border-gray-300" />
+
+          <div className="flex justify-end w-full">
+            <Row gutter={[12, 0]} className="w-full max-w-xs">
+              <Col span={12}>
+                <p className="text-right font-semibold m-0">{translate('Total')}:</p>
+              </Col>
+              <Col span={12}>
+                <MoneyInputFormItem readOnly value={total} className="w-full" />
+              </Col>
+            </Row>
+          </div>
         </Form>
-
-        <Divider className="bg-teal-600 text-white font-bold text-lg py-2 rounded">
-          {translate('Items List')}
-        </Divider>
-
-        <Table
-          columns={columns}
-          dataSource={items}
-          pagination={false}
-          rowKey={(record, index) => index}
-          scroll={{ x: 'max-content' }}
-          className="overflow-x-auto"
-        />
-
-        <Form.List name="items">
-          {() => null}
-        </Form.List>
-
-        <Divider className="border-gray-300" />
-
-        <div className="flex justify-end w-full">
-          <Row gutter={[12, 0]} className="w-full max-w-xs">
-            <Col span={12}>
-              <p className="text-right font-semibold m-0">{translate('Total')}:</p>
-            </Col>
-            <Col span={12}>
-              <MoneyInputFormItem readOnly value={total} className="w-full" />
-            </Col>
-          </Row>
-        </div>
-      </Form>
+      </Spin>
     </div>
   );
 }

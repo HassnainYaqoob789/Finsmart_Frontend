@@ -306,11 +306,11 @@ export default function DataTable({ config, extra = [] }) {
               },
             ]
             : []),
-          // {
-          //   label: translate("Download"),
-          //   key: "download",
-          //   icon: <FilePdfOutlined />,
-          // },
+          {
+            label: translate("Download"),
+            key: "download",
+            icon: <FilePdfOutlined />,
+          },
           ...extra,
           {
             type: "divider",

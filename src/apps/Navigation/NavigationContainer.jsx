@@ -51,49 +51,55 @@ function Sidebar({ collapsible, isMobile = false }) {
   const items =
     currentAdmin.email === "admin@finsmart.com"
       ? [
-          {
-            key: "admin",
-            icon: <CustomerServiceOutlined />,
-            label: <Link to={"/admin"}>Admin Users</Link>,
-          },
-        ]
+        {
+          key: "admin",
+          icon: <SettingOutlined />,
+          label: <Link to={"/admin"}>Admin Users</Link>,
+        },
+      ]
       : [
-          {
-            key: "dashboard",
-            icon: <DashboardOutlined />,
-            label: <Link to={"/"}>{translate("dashboard")}</Link>,
-          },
-          {
-            key: "product",
-            icon: <GoldOutlined />,
-            label: <Link to={"/product"}>Product</Link>,
-          },
-          {
-            key: "product-category",
-            icon: <ProductOutlined />,
-            label: <Link to={"/product-category"}>Product Category</Link>,
-          },
-          {
-            key: "customer",
-            icon: <CustomerServiceOutlined />,
-            label: <Link to={"/customer"}>{translate("customers")}</Link>,
-          },
-          {
-            key: "invoice",
-            icon: <ContainerOutlined />,
-            label: <Link to={"/invoice"}>{translate("invoices")}</Link>,
-          },
-          {
-            key: "quote",
-            icon: <FileSyncOutlined />,
-            label: <Link to={"/quote"}>Quotation</Link>,
-          },
-          {
-            key: "payment",
-            icon: <CreditCardOutlined />,
-            label: <Link to={"/payment"}>{translate("payments")}</Link>,
-          },
-        ];
+        {
+          key: "dashboard",
+          icon: <DashboardOutlined />,
+          label: <Link to={"/"}>{translate("dashboard")}</Link>,
+        },
+        {
+          key: "product",
+          icon: <ShopOutlined />,
+          label: <Link to={"/product"}>Product</Link>,
+        },
+        {
+          key: "product-category",
+          icon: <ProductOutlined />,
+          label: <Link to={"/product-category"}>Product Category</Link>,
+        },
+        {
+          key: "customer",
+          icon: <UserOutlined />,
+          label: <Link to={"/customer"}>{translate("all customers")}</Link>,
+        },
+        {
+          key: "invoice",
+          icon: <FileOutlined />,
+          label: <Link to={"/invoice"}>{translate("all invoices")}</Link>,
+        },
+        {
+          key: "create",
+          icon: <FileSyncOutlined />,
+          label: <Link to={"/invoice/create"}>{translate("new invoice")}</Link>,
+        },
+
+        // {
+        //   key: "quote",
+        //   icon: <FileSyncOutlined />,
+        //   label: <Link to={"/quote"}>Quotation</Link>,
+        // },
+        {
+          key: "payment",
+          icon: <WalletOutlined />,
+          label: <Link to={"/payment"}>{translate("payments")}</Link>,
+        },
+      ];
 
   useEffect(() => {
     if (location)
@@ -128,7 +134,7 @@ function Sidebar({ collapsible, isMobile = false }) {
       width={256}
       style={{
         // overflow: "auto",
-        height: "100vh",
+        // height: "100vh",
         backgroundColor: "#0D1B2A",
         position: isMobile ? "absolute" : "fixed",
         // bottom: '20px',
