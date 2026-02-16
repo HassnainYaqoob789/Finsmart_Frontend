@@ -54,7 +54,7 @@ export default function Admin() {
       dataIndex: 'scenarioIds',
       render: (scenarioIds) => {
         return Array.isArray(scenarioIds) && scenarioIds.length > 0
-          ? scenarioIds.map((e) => e.scenarioId).join(', ')
+          ? scenarioIds.map((e) => e?.scenarioId).join(', ')
           : 'N/A';
       },
     },
@@ -62,18 +62,18 @@ export default function Admin() {
       title: 'Sandbox Token: ',
       dataIndex: 'sandbox_token',
       render: (_, record) => {
-        return record.Creds && record.Creds.length > 0 && record?.Creds[0]?.sandbox_token || 'N/A';
+        return record?.Creds && record?.Creds?.length > 0 && record?.Creds[0]?.sandbox_token || 'N/A';
       },
     },
     {
       title: 'Production Token: ',
       dataIndex: 'production_token',
       render: (_, record) => {
-        return record.Creds && record.Creds.length > 0 && record?.Creds[0]?.production_token || 'N/A';
+        return record?.Creds && record?.Creds?.length > 0 && record?.Creds[0]?.production_token || 'N/A';
       },
     },
-
   ];
+
   const dataTableColumns = [
     {
       title: 'Name',

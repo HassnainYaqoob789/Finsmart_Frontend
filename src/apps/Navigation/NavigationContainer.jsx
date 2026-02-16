@@ -54,7 +54,7 @@ function Sidebar({ collapsible, isMobile = false }) {
         {
           key: "admin",
           icon: <SettingOutlined />,
-          label: <Link to={"/admin"}>Admin Users</Link>,
+          label: <Link to={"/admin"}>All Users</Link>,
         },
       ]
       : [
